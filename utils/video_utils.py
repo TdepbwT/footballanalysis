@@ -16,4 +16,3 @@ def save_video(ouput_video_frames,output_video_path):
     for frame in ouput_video_frames:
         out.write(frame)
     out.release()
-    return
