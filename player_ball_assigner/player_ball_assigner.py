@@ -10,7 +10,7 @@ class PlayerBallAssigner():
         ball_position = get_centre_of_bbox(ball_bbox)
 
         minimum_distance = 99999
-        assigned_players =-1
+        assigned_players = -1
 
         for player_id, player in players.items():
             player_bbox = player["bbox"]

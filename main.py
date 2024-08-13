@@ -21,8 +21,7 @@ def main():
 
     # assign player teams
     team_assigner = TeamAssigner()
-    team_assigner.assign_team_color(video_frames[0],
-                                    tracks["players"][0])
+    team_assigner.assign_team_color(video_frames[0],tracks["players"][0])
 
     for frame_num, player_track in enumerate(tracks["players"]):
         for player_id, track in player_track.items():
@@ -35,17 +34,30 @@ def main():
     # assign ball possession
     player_ball_assigner = PlayerBallAssigner()
     team_ball_control = []
+
     for frame_num, player_track in enumerate(tracks["players"]):
         ball_bbox = tracks["ball"][frame_num][1]["bbox"]
         assigned_player = player_ball_assigner.assign_ball_to_player(player_track, ball_bbox)
 
         if assigned_player != -1:
+            if "ball_possession" not in tracks["players"][frame_num][assigned_player]:
+                tracks["players"][frame_num][assigned_player]["ball_possession"] = False
             tracks["players"][frame_num][assigned_player]["ball_possession"] = True
-            team_ball_control.append(tracks["players"][frame_num][assigned_player]["team"])
-        else:
-            team_ball_control.append(team_ball_control[-1])
 
-    team_ball_control= np.array(team_ball_control)
+            team = tracks["players"][frame_num][assigned_player].get("team")
+            team_ball_control.append(team)
+        else:
+            # handle initial none values
+            if team_ball_control:
+                team_ball_control.append(team_ball_control[-1])
+            else:
+                # replace None with placeholder value
+                team_ball_control.append(-1)
+
+    team_ball_control = np.array(team_ball_control)
+
+    # remove initial frames with placeholder to exclude from calculation
+    team_ball_control = team_ball_control[team_ball_control != -1]
 
 
     # draw output

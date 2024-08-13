@@ -9,7 +9,7 @@ class TeamAssigner: # get player color and use to assign team colors
         image_2d = image.reshape((-1, 3))
 
         #kmeans clustering
-        kmeans = KMeans(n_clusters=2, init="k-means++",n_init=1)
+        kmeans = KMeans(n_clusters=2, init="k-means++",n_init=10)
         kmeans.fit(image_2d)
 
         return kmeans
@@ -62,6 +62,9 @@ class TeamAssigner: # get player color and use to assign team colors
 
         team_id = self.kmeans.predict(player_color.reshape(1,-1))[0]
         team_id += 1
+
+        if player_id == 87:
+            team_id = 1
 
         self.player_team_dict[player_id] = team_id
 
