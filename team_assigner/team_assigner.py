@@ -64,7 +64,7 @@ class TeamAssigner: # get player color and use to assign team colors
         team_id += 1
 
         if player_id == 87:
-            team_id = 1
+            team_id = 2
 
         self.player_team_dict[player_id] = team_id
 
