@@ -1,5 +1,8 @@
 import cv2
 import sys
+import json
+import os
+import numpy as np
 
 sys.path.append('../')
 from footballanalysis.utils import measure_distance, get_foot_position
@@ -16,7 +19,6 @@ class SpeedAndDistance_Estimator():
         for object, object_tracks in tracks.items():
             if object == "ball" or object == "referees":
                 continue
-
 
             number_of_frames = len(object_tracks)
             for frame_num in range(0, number_of_frames, self.frame_window):
@@ -58,6 +60,29 @@ class SpeedAndDistance_Estimator():
                             continue
                         tracks[object][frame_num_batch][track_id]['speed'] = speed_km_per_hour
                         tracks[object][frame_num_batch][track_id]['distance'] = total_distance[object][track_id]
+
+        self.save_total_distance(total_distance)
+
+    def save_total_distance(self, total_distance):
+        os.makedirs('output_videos', exist_ok=True)  # Ensure directory exists
+
+        # Convert NumPy types to Python types
+        def convert_values(obj):
+            if isinstance(obj, dict):
+                return {str(k): convert_values(v) for k, v in obj.items()}  # Ensure keys are strings
+            elif isinstance(obj, list):
+                return [convert_values(i) for i in obj]
+            elif isinstance(obj, (np.integer, np.floating)):  # Convert numpy numbers to Python types
+                return obj.item()
+            elif isinstance(obj, (int, float, str, bool, type(None))):
+                return obj
+            else:
+                return str(obj)  # Convert unknown types to string
+
+        converted_data = convert_values(total_distance)
+
+        with open('output_videos/total_distance.json', 'w') as f:
+            json.dump(converted_data, f, indent=4)
 
     def draw_speed_and_distance(self, frames, tracks):
         output_frames = []

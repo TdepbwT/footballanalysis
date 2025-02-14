@@ -6,6 +6,7 @@ from camera_movement_estimator import CameraMovementEstimator
 from view_transformer import ViewTransformer
 from speed_and_distance_estimator import SpeedAndDistance_Estimator
 import numpy as np
+import os
 
 
 def main():
@@ -91,6 +92,7 @@ def main():
     # draw speed and distance
     speed_and_distance_estimator.draw_speed_and_distance(output_video_frames, tracks)
 
+    os.makedirs("output_videos", exist_ok=True)
 
     # save video
     save_video(output_video_frames, "output_videos/output_video.avi")

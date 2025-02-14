@@ -41,10 +41,13 @@ class TeamAssigner: # get player color and use to assign team colors
 
     def assign_team_color(self, frame, player_detections):
         player_colors = []
-        for _, player_detections in player_detections.items():
+        for player_id, player_detections in player_detections.items():
             bbox = player_detections["bbox"]
             player_color = self.get_player_color(frame, bbox)
             player_colors.append(player_color)
+            
+            if player_id == 87:
+                self.team_colors[1] = player_color
 
         kmeans = KMeans(n_clusters = 2, init="k-means++", n_init= 1)
         kmeans.fit(player_colors)
@@ -64,7 +67,7 @@ class TeamAssigner: # get player color and use to assign team colors
         team_id += 1
 
         if player_id == 87:
-            team_id = 2
+            team_id = 1
 
         self.player_team_dict[player_id] = team_id
 
