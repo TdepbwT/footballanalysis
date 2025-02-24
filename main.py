@@ -37,13 +37,9 @@ def main():
     #interpolate ball positions
     tracks["ball"] = tracker.interpolate_ball_positions(tracks["ball"])
 
-    #speed and distance estimator
-    speed_and_distance_estimator = SpeedAndDistance_Estimator()
-    speed_and_distance_estimator.add_speed_and_distance_to_tracks(tracks)
-
     # assign player teams
     team_assigner = TeamAssigner()
-    team_assigner.assign_team_color(video_frames[0],tracks["players"][0])
+    team_assigner.assign_team_color(video_frames[0], tracks["players"][0])
 
     for frame_num, player_track in enumerate(tracks["players"]):
         for player_id, track in player_track.items():
@@ -52,6 +48,10 @@ def main():
                                                  player_id)
             tracks["players"][frame_num][player_id]["team"] = team
             tracks["players"][frame_num][player_id]["team_color"] = team_assigner.team_colors[team]
+
+    #speed and distance estimator
+    speed_and_distance_estimator = SpeedAndDistance_Estimator()
+    speed_and_distance_estimator.add_speed_and_distance_to_tracks(tracks)
 
     # assign ball possession
     player_ball_assigner = PlayerBallAssigner()

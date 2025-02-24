@@ -1,0 +1,160 @@
+{
+    "players": {
+        "1": {
+            "total_distance": "56.44 m",
+            "total_time": "31.21 s",
+            "max_speed": "37.09 km/h",
+            "average_speed": "6.50 km/h"
+        },
+        "2": {
+            "total_distance": "59.99 m",
+            "total_time": "30.37 s",
+            "max_speed": "38.61 km/h",
+            "average_speed": "7.11 km/h"
+        },
+        "4": {
+            "total_distance": "65.72 m",
+            "total_time": "31.21 s",
+            "max_speed": "34.13 km/h",
+            "average_speed": "7.59 km/h"
+        },
+        "5": {
+            "total_distance": "76.48 m",
+            "total_time": "31.21 s",
+            "max_speed": "38.15 km/h",
+            "average_speed": "8.83 km/h"
+        },
+        "6": {
+            "total_distance": "55.11 m",
+            "total_time": "27.46 s",
+            "max_speed": "42.17 km/h",
+            "average_speed": "7.22 km/h"
+        },
+        "8": {
+            "total_distance": "9.33 m",
+            "total_time": "4.17 s",
+            "max_speed": "21.37 km/h",
+            "average_speed": "8.06 km/h"
+        },
+        "9": {
+            "total_distance": "54.81 m",
+            "total_time": "24.75 s",
+            "max_speed": "54.22 km/h",
+            "average_speed": "7.97 km/h"
+        },
+        "12": {
+            "total_distance": "34.94 m",
+            "total_time": "9.79 s",
+            "max_speed": "31.79 km/h",
+            "average_speed": "12.85 km/h"
+        },
+        "13": {
+            "total_distance": "71.87 m",
+            "total_time": "31.21 s",
+            "max_speed": "33.33 km/h",
+            "average_speed": "8.30 km/h"
+        },
+        "14": {
+            "total_distance": "68.33 m",
+            "total_time": "29.12 s",
+            "max_speed": "38.31 km/h",
+            "average_speed": "8.45 km/h"
+        },
+        "19": {
+            "total_distance": "2.25 m",
+            "total_time": "0.62 s",
+            "max_speed": "21.88 km/h",
+            "average_speed": "12.95 km/h"
+        },
+        "20": {
+            "total_distance": "64.70 m",
+            "total_time": "29.33 s",
+            "max_speed": "47.94 km/h",
+            "average_speed": "7.95 km/h"
+        },
+        "23": {
+            "total_distance": "59.73 m",
+            "total_time": "27.25 s",
+            "max_speed": "26.52 km/h",
+            "average_speed": "7.90 km/h"
+        },
+        "28": {
+            "total_distance": "6.88 m",
+            "total_time": "2.92 s",
+            "max_speed": "19.85 km/h",
+            "average_speed": "8.49 km/h"
+        },
+        "17": {
+            "total_distance": "1.48 m",
+            "total_time": "0.42 s",
+            "max_speed": "15.50 km/h",
+            "average_speed": "12.77 km/h"
+        },
+        "80": {
+            "total_distance": "51.23 m",
+            "total_time": "26.42 s",
+            "max_speed": "31.17 km/h",
+            "average_speed": "6.98 km/h"
+        },
+        "87": {
+            "total_distance": "9.79 m",
+            "total_time": "5.83 s",
+            "max_speed": "18.51 km/h",
+            "average_speed": "6.04 km/h"
+        },
+        "118": {
+            "total_distance": "31.55 m",
+            "total_time": "7.71 s",
+            "max_speed": "57.33 km/h",
+            "average_speed": "14.73 km/h"
+        },
+        "18": {
+            "total_distance": "6.54 m",
+            "total_time": "2.29 s",
+            "max_speed": "24.93 km/h",
+            "average_speed": "10.27 km/h"
+        },
+        "3": {
+            "total_distance": "10.97 m",
+            "total_time": "3.50 s",
+            "max_speed": "22.99 km/h",
+            "average_speed": "11.18 km/h"
+        },
+        "117": {
+            "total_distance": "35.72 m",
+            "total_time": "14.13 s",
+            "max_speed": "38.23 km/h",
+            "average_speed": "9.09 km/h"
+        },
+        "149": {
+            "total_distance": "25.27 m",
+            "total_time": "14.54 s",
+            "max_speed": "27.09 km/h",
+            "average_speed": "6.25 km/h"
+        },
+        "111": {
+            "total_distance": "23.86 m",
+            "total_time": "11.00 s",
+            "max_speed": "31.25 km/h",
+            "average_speed": "7.81 km/h"
+        },
+        "11": {
+            "total_distance": "11.54 m",
+            "total_time": "4.38 s",
+            "max_speed": "18.94 km/h",
+            "average_speed": "9.50 km/h"
+        },
+        "204": {
+            "total_distance": "13.53 m",
+            "total_time": "8.08 s",
+            "max_speed": "29.57 km/h",
+            "average_speed": "6.04 km/h"
+        },
+        "225": {
+            "total_distance": "1.77 m",
+            "total_time": "1.87 s",
+            "max_speed": "7.66 km/h",
+            "average_speed": "3.40 km/h"
+        }
+    }
+}
