@@ -5,16 +5,20 @@ from player_ball_assigner import PlayerBallAssigner
 from camera_movement_estimator import CameraMovementEstimator
 from view_transformer import ViewTransformer
 from speed_and_distance_estimator import SpeedAndDistance_Estimator
+from dotenv import load_dotenv
 import numpy as np
 import os
 
 
 def main():
+    load_dotenv()
+    api_key = os.getenv("ROBOFLOW_API_KEY")
+    
     # read video
     video_frames = read_video("input_videos/08fd33_4.mp4")
 
     # initialize tracker
-    tracker = Tracker("models/best.pt")
+    tracker = Tracker("models/best.pt", "football-field-detection-f07vi/14", api_key)
 
     # get object tracks
     tracks = tracker.get_object_tracks(video_frames,
@@ -22,6 +26,13 @@ def main():
                                        stub_path="stubs/track_stubs.pkl")
     #get obj positions
     tracker.add_position_to_tracks(tracks)
+
+    # Detect pitch keypoints
+    keypoints = tracker.detect_pitch_keypoints(video_frames[0])
+    filtered_keypoints = tracker.filter_keypoints(keypoints)
+
+    # Project players onto the pitch
+    tracker.project_players_to_pitch(video_frames[0], tracks, filtered_keypoints)
 
     #camera movement estimation
     camera_movement_estimator = CameraMovementEstimator(video_frames[0])
@@ -31,8 +42,7 @@ def main():
     camera_movement_estimator.add_adjust_positions_to_tracks(tracks, camera_movement_per_frame)
 
     #view transformer
-    view_transformer = ViewTransformer()
-    view_transformer.add_transformed_positions_to_tracks(tracks)
+    #tracker.view_transformer.add_view_transformer_to_tracks(tracks)
 
     #interpolate ball positions
     tracks["ball"] = tracker.interpolate_ball_positions(tracks["ball"])

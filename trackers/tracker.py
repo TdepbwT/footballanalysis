@@ -6,15 +6,24 @@ import numpy as np
 import pandas as pd
 import cv2
 import sys
+from inference import get_model
+from dotenv import load_dotenv
+from sports.common.view import ViewTransformer
+from sports.annotators.soccer import draw_pitch
 
 sys.path.append('../')
 from footballanalysis.utils import get_centre_of_bbox, get_bbox_width, get_foot_position
 
+load_dotenv()
+api_key = os.getenv("ROBOFLOW_API_KEY")
 
 class Tracker:
-    def __init__(self, model_path):
+    def __init__(self, model_path, field_model_id, api_key):
         self.model = YOLO(model_path)
         self.tracker = sv.ByteTrack()
+        self.field_model = get_model(field_model_id, api_key)
+     
+        
 
     def add_position_to_tracks(sekf, tracks):
         for object, object_tracks in tracks.items():
@@ -26,6 +35,105 @@ class Tracker:
                     else:
                         position = get_foot_position(bbox)
                     tracks[object][frame_num][track_id]['position'] = position
+
+    # detect pitch keypoints
+    def detect_pitch_keypoints(self, frame, confidence_threshold=0.3):
+        result = self.field_model.infer(frame, confidence = confidence_threshold)[0] # get the first result
+        keypoints = sv.KeyPoints.from_inference(result) # convert to supervision KeyPoints format
+        return keypoints
+    
+    # filter keypoints based on confidencec threshold#
+    def filter_keypoints(self, keypoints, confidence_threshold=0.5):
+        # create a mask of keypoints with confidence above threshold
+        filter_mask = keypoints.confidence[0] > confidence_threshold
+        # filtered points
+        filtered_points = keypoints.xy[0][filter_mask]
+        return keypoints
+    
+    # project players to pitch using keypoints
+    def project_players_to_pitch(self, frame, tracks, keypoints):
+        
+        from sports.configs.soccer import SoccerPitchConfiguration
+        import numpy as np
+        pitch_config = SoccerPitchConfiguration()
+        
+        pitch_reference_points = pitch_config.edges
+        
+        if isinstance(pitch_reference_points, list):
+            pitch_reference_points = np.array(pitch_reference_points)
+            
+        source_points = keypoints.xy[0]
+        if isinstance(source_points, list):
+            source_points = np.array(source_points)
+            
+        # check if source points and pitch reference points are of same length
+        if len(source_points) != len(pitch_reference_points):
+            min_points = min(len(source_points), len(pitch_reference_points))
+            source_points = source_points[:min_points]
+            pitch_reference_points = pitch_reference_points[:min_points]
+            
+        self.view_transformer = ViewTransformer(source=source_points,target=pitch_reference_points)
+        # fit the view transformer to the keypoints and pitch reference points
+        
+        for frame_num, player_track in enumerate(tracks["players"]):
+            for player_id, player_data in tracks["players"][frame_num].items():
+                bbox = player_data["bbox"]
+                position = get_foot_position(bbox)
+                position_array = np.array([position])
+                projected_position = self.view_transformer.transform_points(position_array)
+                if hasattr(projected_position, 'shape') and projected_position.shape[0] > 0:
+                    projected_position = projected_position[0]
+
+                tracks["players"][frame_num][player_id]["position_adjusted"] = projected_position
+
+    def project_objects_to_pitch(self, frame, tracks, frame_num):
+        """
+        Project players, referees, and ball onto the pitch using homography.
+        """
+        import numpy as np
+        from sports.configs.soccer import SoccerPitchConfiguration
+        from sports.common.view import ViewTransformer
+
+        # Load pitch configuration
+        pitch_config = SoccerPitchConfiguration()
+
+        # Detect and filter keypoints
+        keypoints = self.detect_pitch_keypoints(frame)
+        filter_mask = keypoints.confidence[0] > 0.5
+        frame_reference_points = keypoints.xy[0][filter_mask]
+        pitch_reference_points = np.array(pitch_config.vertices)[filter_mask]
+
+        # Ensure sufficient keypoints for homography
+        if len(frame_reference_points) < 4 or len(pitch_reference_points) < 4:
+            return None, None, None  # Skip projection if not enough keypoints
+
+        # Perform homography transformation
+        transformer = ViewTransformer(source=frame_reference_points, target=pitch_reference_points)
+
+        # Project players, referees, and ball
+        players_xy = []
+        referees_xy = []
+        ball_xy = []
+        if frame_num < len(tracks["players"]):
+            players_xy = [
+                transformer.transform_points(np.array([player["position_adjusted"]]))
+                for player in tracks["players"][frame_num].values()
+                if "position_adjusted" in player
+            ]
+        if frame_num < len(tracks["referees"]):
+            referees_xy = [
+                transformer.transform_points(np.array([referee["position_adjusted"]]))
+                for referee in tracks["referees"][frame_num].values()
+                if "position_adjusted" in referee
+            ]
+        if frame_num < len(tracks["ball"]):
+            ball_xy = [
+                transformer.transform_points(np.array([ball["position_adjusted"]]))
+                for ball in tracks["ball"][frame_num].values()
+                if "position_adjusted" in ball
+            ]
+
+        return players_xy, referees_xy, ball_xy
 
     def interpolate_ball_positions(self, ball_positions):
         ball_positions = [x.get(1, {}).get('bbox', []) for x in ball_positions]
@@ -46,6 +154,8 @@ class Tracker:
             detections_batch = self.model.predict(frames[i:i + batch_size], conf=0.1)
             detections += detections_batch
         return detections
+    
+    
 
     def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
 
@@ -187,116 +297,95 @@ class Tracker:
 
         return frame
     
-    def draw_radars(self, frame, tracks, frame_num, radar_size=(400,250), position=(50,800)):
+    def draw_radars(self, frame, tracks, frame_num, radar_size=(400, 250), position=(50, 50)):
         """
-        Draw radars for each player in the frame
-        
-        params:
-        frame: np.array: frame to draw radars on
-        tracks: dict: dictionary of tracks
-        frame_num: int: frame number
-        radar_size: tuple: size of radar
-        position: tuple: position to draw radar on frame
-        
-        return:
-        np.array: frame with radars drawn
+        Draw radar with player positions and ball projected onto the pitch using the draw_pitch function.
         """
-        
-        # create blank image for radar
-        radar_width, radar_height = radar_size
-        radar = np.zeros((radar_height, radar_width, 3), dtype=np.uint8)
-        
-        # draw radar (green background, white lines)
-        radar[:, :] = (0, 150, 0)  # Darker green for better visibility
-        
-        # draw outline
-        margin = 10
-        pitch_width = radar_width - 2 * margin
-        pitch_height = radar_height - 2 * margin
-        cv2.rectangle(radar, (margin, margin), (margin + pitch_width, margin + pitch_height), (255, 255, 255), 2)
-        
-        # draw halfway line
-        cv2.line(radar, (margin + pitch_width // 2, margin), (margin + pitch_width // 2, margin + pitch_height), (255, 255, 255), 2)
-        
-        # draw center circle
-        center_circle_radius = min(pitch_width, pitch_height) // 10
-        cv2.circle(radar, (margin + pitch_width // 2, margin + pitch_height // 2), center_circle_radius, (255, 255, 255), 2)
-        
-        # draw penalty areas
-        penalty_area_width = pitch_width // 5
-        penalty_area_height = pitch_height // 3
-        cv2.rectangle(radar, (margin, margin + pitch_height // 2 - penalty_area_height // 2), 
-                     (margin + penalty_area_width, margin + pitch_height // 2 + penalty_area_height // 2), (255, 255, 255), 2)
-        cv2.rectangle(radar, (margin + pitch_width - penalty_area_width, margin + pitch_height // 2 - penalty_area_height // 2), 
-                     (margin + pitch_width, margin + pitch_height // 2 + penalty_area_height // 2), (255, 255, 255), 2)
-        
-        # map player positions to radar
+        import numpy as np
+        import cv2
+        from sports.annotators.soccer import draw_pitch, draw_points_on_pitch
+        from sports.configs.soccer import SoccerPitchConfiguration
+        from sports.common.view import ViewTransformer
+        import supervision as sv
+
+        # Load pitch configuration
+        pitch_config = SoccerPitchConfiguration()
+
+        # Create radar view (pitch visualization)
+        radar = draw_pitch(
+            config=pitch_config,
+            background_color=sv.Color.from_hex("#FFFFFF"),  # White
+            line_color=sv.Color.from_hex("#000000")  # Black
+        )
+
+        # Filter keypoints for accurate pitch projection
+        keypoints = self.detect_pitch_keypoints(frame)
+        filter_mask = keypoints.confidence[0] > 0.5
+        frame_reference_points = keypoints.xy[0][filter_mask]
+        pitch_reference_points = np.array(pitch_config.vertices)[filter_mask]
+
+        # Ensure sufficient keypoints for homography
+        if len(frame_reference_points) < 4 or len(pitch_reference_points) < 4:
+            return frame  # Skip radar if not enough keypoints
+
+        # Perform homography transformation
+        transformer = ViewTransformer(source=frame_reference_points, target=pitch_reference_points)
+
+        # Project players and ball onto the pitch
+        players_xy = []
+        ball_xy = []
         if frame_num < len(tracks["players"]):
-            # get all players in current frame
-            players = tracks["players"][frame_num]
-            
-            # map from pitch coordinates to radar coordinates
-            for player_id, player in players.items():
-                if "position_adjusted" in player:
-                    player_position = player.get("position_adjusted", [0, 0])
-                    
-                    # Normalize position to radar coordinate space
-                    # Assuming position_adjusted is in range [-1, 1] for both x and y
-                    # Convert to [0, 1] range first
-                    norm_x = (player_position[0] + 1) / 2
-                    norm_y = (player_position[1] + 1) / 2
-                    
-                    # Scale to radar coords - from normalized [0,1] to actual radar coordinates
-                    x = int(margin + (norm_x * pitch_width))
-                    y = int(margin + (norm_y * pitch_height))
-                    
-                    # ensure player is within radar bounds
-                    x = max(margin, min(x, margin + pitch_width))
-                    y = max(margin, min(y, margin + pitch_height))
-                    
-                    # draw player
-                    color = player.get("team_color", (0, 0, 255))
-                    cv2.circle(radar, (x, y), 5, color, -1)
-                    cv2.circle(radar, (x, y), 5, (255, 255, 255), 1)
-                    
-                    # draw player id
-                    cv2.putText(radar, str(player_id), (x + 6, y + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            # draw ball
-            if 1 in tracks["ball"][frame_num] and "position_adjusted" in tracks["ball"][frame_num][1]:
-                ball_position = tracks["ball"][frame_num][1].get("position_adjusted", [0, 0])
-                
-                # Normalize ball position
-                norm_ball_x = (ball_position[0] + 1) / 2
-                norm_ball_y = (ball_position[1] + 1) / 2
-                
-                ball_x = int(margin + (norm_ball_x * pitch_width))
-                ball_y = int(margin + (norm_ball_y * pitch_height))
-                
-                # ensure ball is within radar bounds
-                ball_x = max(margin, min(margin + pitch_width, ball_x))
-                ball_y = max(margin, min(margin + pitch_height, ball_y))
-                
-                # draw ball
-                cv2.circle(radar, (ball_x, ball_y), 3, (255, 255, 255), -1)
-        
-        # Create overlay for the main frame
-        overlay = frame.copy()
+            players_xy = [
+                transformer.transform_points(np.array([player["position_adjusted"]]))
+                for player in tracks["players"][frame_num].values()
+                if "position_adjusted" in player
+            ]
+        if frame_num < len(tracks["ball"]):
+            ball_xy = [
+                transformer.transform_points(np.array([ball["position_adjusted"]]))
+                for ball in tracks["ball"][frame_num].values()
+                if "position_adjusted" in ball
+            ]
+
+        # Draw players on the radar
+        for player_pos in players_xy:
+            if player_pos.shape[0] > 0:
+                draw_points_on_pitch(
+                    config=pitch_config,
+                    xy=player_pos,
+                    face_color=sv.Color.from_hex("#0000FF"),  # Blue
+                    edge_color=sv.Color.from_hex("#FFFFFF"),  # White
+                    radius=8,
+                    pitch=radar
+                )
+
+        # Draw ball on the radar
+        for ball_pos in ball_xy:
+            if ball_pos.shape[0] > 0:
+                draw_points_on_pitch(
+                    config=pitch_config,
+                    xy=ball_pos,
+                    face_color=sv.Color.from_hex("#FFFFFF"),  # White
+                    edge_color=sv.Color.from_hex("#000000"),  # Black
+                    radius=5,
+                    pitch=radar
+                )
+
+        # Overlay radar on the main frame
         x, y = position
+        radar_height, radar_width, _ = radar.shape
         
-        # Draw background rectangle
-        cv2.rectangle(overlay, (x, y), (x + radar_width, y + radar_height), (0, 0, 0), -1)
+        # Ensure position is within frame bounds
+        max_x = frame.shape[1] - radar_width
+        max_y = frame.shape[0] - radar_height
+        x = min(max(0, x), max_x)
+        y = min(max(0, y), max_y)
         
-        # Place radar on overlay
+        overlay = frame.copy()
         overlay[y:y + radar_height, x:x + radar_width] = radar
-        
-        # Apply transparency
-        alpha = 0.7
+        alpha = 0.8
         cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
-        
-        # Add title text
-        cv2.putText(frame, "Top-Down View", (x + 10, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                
+
         return frame
 
     def draw_annotations(self, video_frames, tracks, team_ball_control):
@@ -304,33 +393,28 @@ class Tracker:
         for frame_num, frame in enumerate(video_frames):
             frame = frame.copy()
 
+            # Draw players, referees, and ball
             player_dict = tracks["players"][frame_num]
             ball_dict = tracks["ball"][frame_num]
             referee_dict = tracks["referees"][frame_num]
 
-            # Draw Players
             for track_id, player in player_dict.items():
                 color = player.get("team_color", (0, 0, 255))
                 frame = self.draw_ellipse(frame, player["bbox"], color, track_id)
 
-                if player.get('has_ball', False):
-                    frame = self.draw_traingle(frame, player["bbox"], (0, 0, 255))
-
-            # Draw Referee
             for _, referee in referee_dict.items():
                 frame = self.draw_ellipse(frame, referee["bbox"], (0, 255, 255))
 
-            # Draw ball 
             for track_id, ball in ball_dict.items():
                 frame = self.draw_traingle(frame, ball["bbox"], (0, 255, 0))
 
             # Draw Team Ball Control
             frame = self.draw_team_ball_control(frame, frame_num, team_ball_control)
-            
-            # Draw radars
+
+            # Draw radar view
             radar_size = (400, 250)
-            radar_x = (frame.shape[1] - radar_size[0]) // 50
-            radar_y = (frame.shape[0] - radar_size[1]) - 30
+            radar_x = (frame.shape[1] - radar_size[0]) // 2
+            radar_y = frame.shape[0] - radar_size[1] - 30
             frame = self.draw_radars(frame, tracks, frame_num, radar_size, (radar_x, radar_y))
 
             output_video_frames.append(frame)
