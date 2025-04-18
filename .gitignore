@@ -1,2 +1,3 @@
 # .gitignore
 .env
+output_videos/output_video.avi

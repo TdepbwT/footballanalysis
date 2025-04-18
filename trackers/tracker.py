@@ -331,45 +331,86 @@ class Tracker:
         # Perform homography transformation
         transformer = ViewTransformer(source=frame_reference_points, target=pitch_reference_points)
 
-        # Project players and ball onto the pitch
-        players_xy = []
-        ball_xy = []
+        # Team color mapping (map team ID to sv.Color)
+        # We'll store these to use consistently for all players
+        team_color_map = {}
+        
+        # First pass: collect team colors
         if frame_num < len(tracks["players"]):
-            players_xy = [
-                transformer.transform_points(np.array([player["position_adjusted"]]))
-                for player in tracks["players"][frame_num].values()
-                if "position_adjusted" in player
-            ]
+            for player_id, player in tracks["players"][frame_num].items():
+                if "team" in player and "team_color" in player:
+                    team = player["team"]
+                    team_color = player["team_color"]
+                    
+                    # Convert BGR team_color to sv.Color
+                    if isinstance(team_color, tuple) and len(team_color) == 3:
+                        # BGR to RGB for sv.Color
+                        r, g, b = team_color[2], team_color[1], team_color[0]
+                        color = sv.Color.from_rgb_tuple((r, g, b))
+                        team_color_map[team] = color
+
+        # Set default team colors if not found
+        if 1 not in team_color_map:
+            team_color_map[1] = sv.Color.from_hex("#FF0000")  # Red
+        if 2 not in team_color_map:
+            team_color_map[2] = sv.Color.from_hex("#0000FF")  # Blue
+        
+        # Project players and ball onto the pitch
+        if frame_num < len(tracks["players"]):
+            for player_id, player in tracks["players"][frame_num].items():
+                if "position_adjusted" in player:
+                    # Get team
+                    team = player.get("team", 0)
+                    
+                    # Get color from team_color_map
+                    if team in team_color_map:
+                        color = team_color_map[team]
+                    else:
+                        color = sv.Color.from_hex("#0000FF")  # Default blue
+                    
+                    # Project position to pitch
+                    player_pos = transformer.transform_points(np.array([player["position_adjusted"]]))
+                    
+                    # Draw player on radar with team color
+                    if player_pos.shape[0] > 0:
+                        draw_points_on_pitch(
+                            config=pitch_config,
+                            xy=player_pos,
+                            face_color=color,
+                            edge_color=sv.Color.from_hex("#FFFFFF"),  # White edge
+                            radius=8,
+                            pitch=radar
+                        )
+        
+        # Draw referees with unique color (yellow)
+        if "referees" in tracks and frame_num < len(tracks["referees"]):
+            for referee_id, referee in tracks["referees"][frame_num].items():
+                if "position_adjusted" in referee:
+                    referee_pos = transformer.transform_points(np.array([referee["position_adjusted"]]))
+                    if referee_pos.shape[0] > 0:
+                        draw_points_on_pitch(
+                            config=pitch_config,
+                            xy=referee_pos,
+                            face_color=sv.Color.from_hex("#FFFF00"),  # Yellow for referees
+                            edge_color=sv.Color.from_hex("#000000"),  # Black edge
+                            radius=8,
+                            pitch=radar
+                        )
+        
+        # Draw ball
         if frame_num < len(tracks["ball"]):
-            ball_xy = [
-                transformer.transform_points(np.array([ball["position_adjusted"]]))
-                for ball in tracks["ball"][frame_num].values()
-                if "position_adjusted" in ball
-            ]
-
-        # Draw players on the radar
-        for player_pos in players_xy:
-            if player_pos.shape[0] > 0:
-                draw_points_on_pitch(
-                    config=pitch_config,
-                    xy=player_pos,
-                    face_color=sv.Color.from_hex("#0000FF"),  # Blue
-                    edge_color=sv.Color.from_hex("#FFFFFF"),  # White
-                    radius=8,
-                    pitch=radar
-                )
-
-        # Draw ball on the radar
-        for ball_pos in ball_xy:
-            if ball_pos.shape[0] > 0:
-                draw_points_on_pitch(
-                    config=pitch_config,
-                    xy=ball_pos,
-                    face_color=sv.Color.from_hex("#FFFFFF"),  # White
-                    edge_color=sv.Color.from_hex("#000000"),  # Black
-                    radius=5,
-                    pitch=radar
-                )
+            for ball_id, ball in tracks["ball"][frame_num].items():
+                if "position_adjusted" in ball:
+                    ball_pos = transformer.transform_points(np.array([ball["position_adjusted"]]))
+                    if ball_pos.shape[0] > 0:
+                        draw_points_on_pitch(
+                            config=pitch_config,
+                            xy=ball_pos,
+                            face_color=sv.Color.from_hex("#FFFFFF"),  # White for ball
+                            edge_color=sv.Color.from_hex("#000000"),  # Black edge
+                            radius=5,
+                            pitch=radar
+                        )
 
         # Overlay radar on the main frame
         x, y = position
@@ -380,6 +421,11 @@ class Tracker:
         max_y = frame.shape[0] - radar_height
         x = min(max(0, x), max_x)
         y = min(max(0, y), max_y)
+        
+        # Add title and border to radar
+        cv2.rectangle(radar, (0, 0), (radar_width-1, radar_height-1), (0, 0, 0), 2)
+        cv2.putText(radar, "Tactical View", (10, 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
         
         overlay = frame.copy()
         overlay[y:y + radar_height, x:x + radar_width] = radar
